@@ -15,7 +15,7 @@
  */
 
 locals {
-  location                        = "us-east4"
+  location                        = "asia-northeast1"
   non_confidential_dataset_id     = "non_confidential_dataset"
   confidential_dataset_id         = "secured_dataset"
   taxonomy_name                   = "secured_taxonomy"
@@ -47,7 +47,10 @@ module "secured_data_warehouse" {
   bucket_name                      = "standalone-data-ing"
   pubsub_resource_location         = local.location
   location                         = local.location
-  trusted_locations                = ["us-locations"]
+
+  trusted_locations                = ["us-locations", "asia-locations"]
+  # trusted_locations                = ["us-locations"]
+
   dataset_id                       = local.non_confidential_dataset_id
   confidential_dataset_id          = local.confidential_dataset_id
   cmek_keyring_name                = "standalone-data-ing"

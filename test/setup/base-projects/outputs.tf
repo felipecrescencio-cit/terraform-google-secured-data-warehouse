@@ -26,7 +26,8 @@ output "non_confidential_data_project_id" {
 
 output "data_governance_project_id" {
   description = "Data governance project ID"
-  value       = module.data_governance_project.project_id
+  # value       = module.data_governance_project.project_id
+  value       = var.data_governance_project_id
 }
 
 output "confidential_data_project_id" {

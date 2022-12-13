@@ -15,7 +15,13 @@
  */
 
 locals {
-  app_engine_location = lookup({ "europe-west1" = "europe-west", "us-central1" = "us-central" }, var.region, var.region)
+  app_engine_location = lookup({
+    "europe-west1" = "europe-west",
+    "us-central1" = "us-central",
+
+    # using zone instead of region
+    "asia-northeast1" = "asia-northeast1",
+  }, var.region, var.region)
 }
 
 resource "random_id" "project_id_suffix" {
@@ -61,31 +67,31 @@ resource "google_app_engine_application" "app" {
   location_id = local.app_engine_location
 }
 
-module "data_governance_project" {
-  source  = "terraform-google-modules/project-factory/google"
-  version = "~> 10.0"
+# module "data_governance_project" {
+#   source  = "terraform-google-modules/project-factory/google"
+#   version = "~> 10.0"
 
-  name                    = "sdw-data-gov-${random_id.project_id_suffix.hex}"
-  random_project_id       = "true"
-  org_id                  = var.org_id
-  labels                  = var.labels
-  folder_id               = var.folder_id
-  billing_account         = var.billing_account
-  default_service_account = "deprivilege"
+#   name                    = "sdw-data-gov-${random_id.project_id_suffix.hex}"
+#   random_project_id       = "true"
+#   org_id                  = var.org_id
+#   labels                  = var.labels
+#   folder_id               = var.folder_id
+#   billing_account         = var.billing_account
+#   default_service_account = "deprivilege"
 
-  activate_apis = [
-    "datacatalog.googleapis.com",
-    "cloudresourcemanager.googleapis.com",
-    "storage-api.googleapis.com",
-    "serviceusage.googleapis.com",
-    "iam.googleapis.com",
-    "accesscontextmanager.googleapis.com",
-    "cloudbilling.googleapis.com",
-    "cloudkms.googleapis.com",
-    "dlp.googleapis.com",
-    "secretmanager.googleapis.com"
-  ]
-}
+#   activate_apis = [
+#     "datacatalog.googleapis.com",
+#     "cloudresourcemanager.googleapis.com",
+#     "storage-api.googleapis.com",
+#     "serviceusage.googleapis.com",
+#     "iam.googleapis.com",
+#     "accesscontextmanager.googleapis.com",
+#     "cloudbilling.googleapis.com",
+#     "cloudkms.googleapis.com",
+#     "dlp.googleapis.com",
+#     "secretmanager.googleapis.com"
+#   ]
+# }
 
 module "non_confidential_data_project" {
   source  = "terraform-google-modules/project-factory/google"

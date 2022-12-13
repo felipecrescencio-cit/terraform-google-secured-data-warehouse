@@ -39,3 +39,7 @@ variable "region" {
   description = "The region in which the subnetwork and the App Engine application will be created."
   type        = string
 }
+
+variable "data_governance_project_id" {
+  type = string
+}

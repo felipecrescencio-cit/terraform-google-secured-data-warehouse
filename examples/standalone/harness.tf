@@ -29,6 +29,33 @@ locals {
   }
 }
 
+module "data_governance_project" {
+  source  = "terraform-google-modules/project-factory/google"
+  version = "~> 10.0"
+
+  name                    = "sdw-data-gov-${random_id.suffix.hex}"
+  random_project_id       = "true"
+  org_id                  = var.org_id
+  labels                  = { environment = "dev" }
+  folder_id               = "639252281058"
+  billing_account         = var.billing_account
+  default_service_account = "deprivilege"
+
+  activate_apis = [
+    "datacatalog.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
+    "storage-api.googleapis.com",
+    "serviceusage.googleapis.com",
+    "iam.googleapis.com",
+    "accesscontextmanager.googleapis.com",
+    "cloudbilling.googleapis.com",
+    "cloudkms.googleapis.com",
+    "dlp.googleapis.com",
+    "secretmanager.googleapis.com"
+  ]
+}
+
+
 module "base_projects" {
   source = "../../test//setup/base-projects"
 
@@ -37,6 +64,7 @@ module "base_projects" {
   folder_id       = var.folder_id
   billing_account = var.billing_account
   region          = local.location
+  data_governance_project_id = module.data_governance_project.project_id
 }
 
 module "iam_projects" {
