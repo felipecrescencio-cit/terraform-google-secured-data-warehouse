@@ -74,3 +74,8 @@ variable "data_engineer_group" {
   description = "Google Cloud IAM group that sets up and maintains the data pipeline and warehouse."
   type        = string
 }
+
+variable "create_jobs" {
+  type = bool
+  default = true
+}

@@ -51,6 +51,8 @@ module "secured_data_warehouse" {
   trusted_locations                = ["us-locations", "asia-locations"]
   # trusted_locations                = ["us-locations"]
 
+  data_ingestion_perimeter = "sp_p_shared_restricted_default_perimeter_ef51"
+
   dataset_id                       = local.non_confidential_dataset_id
   confidential_dataset_id          = local.confidential_dataset_id
   cmek_keyring_name                = "standalone-data-ing"
@@ -134,8 +136,10 @@ resource "google_artifact_registry_repository_iam_member" "confidential_python_r
 module "regional_deid_pipeline" {
   source = "../../modules/dataflow-flex-job"
 
+  count = var.create_jobs ? 1 : 0
+
   project_id              = module.base_projects.data_ingestion_project_id
-  name                    = "dataflow-flex-regional-dlp-deid-job-python-query"
+  name                    = "dataflow-flex-regional-dlp-deid-job-python-query4"
   container_spec_gcs_path = module.template_project.python_re_identify_template_gs_path
   job_language            = "PYTHON"
   region                  = local.location
@@ -159,18 +163,22 @@ module "regional_deid_pipeline" {
 }
 
 resource "time_sleep" "wait_de_identify_job_execution" {
+  count = var.create_jobs ? 1 : 0
+
   create_duration = "600s"
 
   depends_on = [
-    module.regional_deid_pipeline
+    module.regional_deid_pipeline[0]
   ]
 }
 
 module "regional_reid_pipeline" {
   source = "../../modules/dataflow-flex-job"
 
+  count = var.create_jobs ? 1 : 0
+
   project_id              = module.base_projects.confidential_data_project_id
-  name                    = "dataflow-flex-regional-dlp-reid-job-python-query"
+  name                    = "dataflow-flex-regional-dlp-reid-job-python-query5"
   container_spec_gcs_path = module.template_project.python_re_identify_template_gs_path
   job_language            = "PYTHON"
   region                  = local.location
@@ -193,7 +201,7 @@ module "regional_reid_pipeline" {
   }
 
   depends_on = [
-    time_sleep.wait_de_identify_job_execution,
+    time_sleep.wait_de_identify_job_execution[0],
     google_bigquery_table.re_id
   ]
 }

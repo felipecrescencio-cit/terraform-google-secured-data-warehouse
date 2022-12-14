@@ -30,7 +30,7 @@ output "bigquery_non_confidential_table" {
   value       = local.bigquery_non_confidential_table
 
   depends_on = [
-    module.regional_deid_pipeline
+    module.regional_deid_pipeline[0]
   ]
 }
 
@@ -181,10 +181,10 @@ output "taxonomy_display_name" {
 
 output "regional_reid_pipeline_job_id" {
   description = "The unique ID of this job."
-  value       = module.regional_reid_pipeline.job_id
+  value       = try(module.regional_reid_pipeline[0].job_id, "")
 }
 
 output "regional_deid_pipeline_job_id" {
   description = "The unique ID of this job."
-  value       = module.regional_deid_pipeline.job_id
+  value       = try(module.regional_deid_pipeline[0].job_id, "")
 }
