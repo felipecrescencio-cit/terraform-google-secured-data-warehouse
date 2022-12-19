@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/csv"
 	"flag"
 	"fmt"
@@ -24,6 +25,9 @@ import (
 	"time"
 
 	gofakeit "github.com/brianvoe/gofakeit/v6"
+
+	"github.com/google/tink/go/hybrid"
+	"github.com/google/tink/go/keyset"
 )
 
 const (
@@ -154,7 +158,9 @@ func generateEntry(faker *gofakeit.Faker) entry {
 	e.cardHolderName = faker.Name()
 	cc := faker.CreditCard()
 	e.cvv = cc.Cvv
-	e.cardNumber = cc.Number
+
+	e.cardNumber = encryptData(cc.Number)
+
 	e.cardTypeFullName = cc.Type
 	e.cardTypeCode = ccShortCode(cc.Type)
 	// expiry is 3-5 years after issue
@@ -178,6 +184,59 @@ func parseFlags() genCfg {
 		c.filename = fmt.Sprintf("data-%d.csv", c.count)
 	}
 	return c
+}
+
+func encryptData(data string) string {
+	khPriv, err := keyset.NewHandle(hybrid.ECIESHKDFAES128GCMKeyTemplate())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// TODO: save the private keyset to a safe location. DO NOT hardcode it in source code.
+	// Consider encrypting it with a remote key in Cloud KMS, AWS KMS or HashiCorp Vault.
+	// See https://github.com/google/tink/blob/master/docs/GOLANG-HOWTO.md#storing-and-loading-existing-keysets.
+
+	khPub, err := khPriv.Public()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// b, err := os.ReadFile("./pubkey.json") // just pass the file name
+	// if err != nil {
+	// 	fmt.Print(err)
+	// }
+
+	//reader := tink.JsonKeysetReader(json_pub)
+	// reader := keyset.NewJSONReader(b)
+
+	//kh_pub = cleartext_keyset_handle.read(reader)
+	// khPub = khPriv.ReadWithNoSecrets(reader)
+
+	enc, err := hybrid.NewHybridEncrypt(khPub)
+
+	msg := []byte(data)
+	// encryptionContext := []byte("encryption context")
+	encryptionContext := []byte("")
+
+	ct, err := enc.Encrypt(msg, encryptionContext)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dec, err := hybrid.NewHybridDecrypt(khPriv)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	pt, err := dec.Decrypt(ct, encryptionContext)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Ciphertext: %s\n", base64.StdEncoding.EncodeToString(ct))
+	fmt.Printf("Original  plaintext: %s\n", msg)
+	fmt.Printf("Decrypted Plaintext: %s\n", pt)
+
+	return base64.StdEncoding.EncodeToString(ct)
 }
 
 func main() {
