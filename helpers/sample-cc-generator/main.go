@@ -27,7 +27,9 @@ import (
 	gofakeit "github.com/brianvoe/gofakeit/v6"
 
 	"github.com/google/tink/go/hybrid"
+	"github.com/google/tink/go/insecurecleartextkeyset"
 	"github.com/google/tink/go/keyset"
+	"github.com/google/tink/go/tink"
 )
 
 const (
@@ -52,6 +54,10 @@ var (
 		"Card PIN",
 		"Credit Limit",
 	}
+	khPriv *keyset.Handle
+	khPub  *keyset.Handle
+	enc    tink.HybridEncrypt
+	dec    tink.HybridDecrypt
 )
 
 // generator config
@@ -186,21 +192,68 @@ func parseFlags() genCfg {
 	return c
 }
 
-func encryptData(data string) string {
-	khPriv, err := keyset.NewHandle(hybrid.ECIESHKDFAES128GCMKeyTemplate())
+func setupKeyset() {
+	var err error
+
+	f, err := os.Open("./pubkey.json")
 	if err != nil {
 		log.Fatal(err)
 	}
+	defer f.Close()
+
+	reader := keyset.NewJSONReader(f)
+
+	khPub, err = keyset.ReadWithNoSecrets(reader)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// khPriv2, err := keyset.NewHandle(hybrid.ECIESHKDFAES128GCMKeyTemplate())
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	// TODO: save the private keyset to a safe location. DO NOT hardcode it in source code.
 	// Consider encrypting it with a remote key in Cloud KMS, AWS KMS or HashiCorp Vault.
 	// See https://github.com/google/tink/blob/master/docs/GOLANG-HOWTO.md#storing-and-loading-existing-keysets.
 
-	khPub, err := khPriv.Public()
+	// khPub2, err := khPriv.Public()
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// fmt.Println(khPub2)
+
+	enc, err = hybrid.NewHybridEncrypt(khPub)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	f2, err := os.Open("./keyset.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f2.Close()
+
+	reader2 := keyset.NewJSONReader(f2)
+
+	// khPriv, err = keyset.ReadWithNoSecrets(reader2)
+	khPriv, err = insecurecleartextkeyset.Read(reader2)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dec, err = hybrid.NewHybridDecrypt(khPriv)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// fmt.Println("enc ", enc)
+	// fmt.Println("dec ", dec)
+}
+
+func encryptData(data string) string {
 	// b, err := os.ReadFile("./pubkey.json") // just pass the file name
 	// if err != nil {
 	// 	fmt.Print(err)
@@ -212,8 +265,6 @@ func encryptData(data string) string {
 	//kh_pub = cleartext_keyset_handle.read(reader)
 	// khPub = khPriv.ReadWithNoSecrets(reader)
 
-	enc, err := hybrid.NewHybridEncrypt(khPub)
-
 	msg := []byte(data)
 	// encryptionContext := []byte("encryption context")
 	encryptionContext := []byte("")
@@ -223,17 +274,12 @@ func encryptData(data string) string {
 		log.Fatal(err)
 	}
 
-	dec, err := hybrid.NewHybridDecrypt(khPriv)
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	pt, err := dec.Decrypt(ct, encryptionContext)
-	if err != nil {
+	if err != nil || pt == nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Ciphertext: %s\n", base64.StdEncoding.EncodeToString(ct))
-	fmt.Printf("Original  plaintext: %s\n", msg)
+	// fmt.Printf("Ciphertext: %s\n", base64.StdEncoding.EncodeToString(ct))
+	// fmt.Printf("Original  plaintext: %s\n", msg)
 	fmt.Printf("Decrypted Plaintext: %s\n", pt)
 
 	return base64.StdEncoding.EncodeToString(ct)
@@ -255,6 +301,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	setupKeyset()
 
 	faker := gofakeit.New(cfg.seed)
 	for i := 0; i < cfg.count; i++ {
