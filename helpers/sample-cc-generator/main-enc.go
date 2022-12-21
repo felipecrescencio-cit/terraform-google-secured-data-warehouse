@@ -27,7 +27,6 @@ import (
 	gofakeit "github.com/brianvoe/gofakeit/v6"
 
 	"github.com/google/tink/go/hybrid"
-	"github.com/google/tink/go/insecurecleartextkeyset"
 	"github.com/google/tink/go/keyset"
 	"github.com/google/tink/go/tink"
 )
@@ -54,10 +53,8 @@ var (
 		"Card PIN",
 		"Credit Limit",
 	}
-	khPriv *keyset.Handle
-	khPub  *keyset.Handle
-	enc    tink.HybridEncrypt
-	dec    tink.HybridDecrypt
+	khPub *keyset.Handle
+	enc   tink.HybridEncrypt
 )
 
 // generator config
@@ -228,29 +225,6 @@ func setupKeyset() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	f2, err := os.Open("./keyset.json")
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f2.Close()
-
-	reader2 := keyset.NewJSONReader(f2)
-
-	// khPriv, err = keyset.ReadWithNoSecrets(reader2)
-	khPriv, err = insecurecleartextkeyset.Read(reader2)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	dec, err = hybrid.NewHybridDecrypt(khPriv)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// fmt.Println("enc ", enc)
-	// fmt.Println("dec ", dec)
 }
 
 func encryptData(data string) string {
@@ -273,14 +247,6 @@ func encryptData(data string) string {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	pt, err := dec.Decrypt(ct, encryptionContext)
-	if err != nil || pt == nil {
-		log.Fatal(err)
-	}
-	// fmt.Printf("Ciphertext: %s\n", base64.StdEncoding.EncodeToString(ct))
-	// fmt.Printf("Original  plaintext: %s\n", msg)
-	fmt.Printf("Decrypted Plaintext: %s\n", pt)
 
 	return base64.StdEncoding.EncodeToString(ct)
 }
