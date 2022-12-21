@@ -24,8 +24,9 @@ import (
 	gofakeit "github.com/brianvoe/gofakeit/v6"
 
 	"github.com/gocarina/gocsv"
+	"github.com/google/tink/go/core/registry"
 	"github.com/google/tink/go/hybrid"
-	"github.com/google/tink/go/insecurecleartextkeyset"
+	"github.com/google/tink/go/integration/gcpkms"
 	"github.com/google/tink/go/keyset"
 	"github.com/google/tink/go/tink"
 )
@@ -54,6 +55,10 @@ var (
 	}
 	khPriv *keyset.Handle
 	dec    tink.HybridDecrypt
+
+	// Change this. AWS KMS, Google Cloud KMS and HashiCorp Vault are supported out of the box.
+	keyURI          = os.Getenv("KEY_URI")
+	credentialsPath = os.Getenv("GCP_CRED_PATH")
 )
 
 // generator config
@@ -142,16 +147,22 @@ func parseFlags() genCfg {
 func setupKeyset() {
 	var err error
 
-	f2, err := os.Open("./keyset.json")
+	f, err := os.Open("./keyset-enc")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer f2.Close()
+	defer f.Close()
 
-	reader2 := keyset.NewJSONReader(f2)
+	reader := keyset.NewBinaryReader(f)
+
+	masterKey, err := loadMasterKeyFromKMS()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// khPriv, err = keyset.ReadWithNoSecrets(reader2)
-	khPriv, err = insecurecleartextkeyset.Read(reader2)
+	// khPriv, err = insecurecleartextkeyset.Read(reader)
+	khPriv, err = keyset.Read(reader, masterKey)
 
 	if err != nil {
 		log.Fatal(err)
@@ -174,6 +185,21 @@ func decryptData(data string) string {
 	}
 
 	return string(pt)
+}
+
+func loadMasterKeyFromKMS() (tink.AEAD, error) {
+	// Fetch the master key from a KMS.
+	gcpClient, err := gcpkms.NewClientWithCredentials(keyURI, credentialsPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	registry.RegisterKMSClient(gcpClient)
+	masterKey, err := gcpClient.GetAEAD(keyURI)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return masterKey, err
 }
 
 func main() {

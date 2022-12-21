@@ -26,7 +26,10 @@ import (
 
 	gofakeit "github.com/brianvoe/gofakeit/v6"
 
+	"github.com/google/tink/go/core/registry"
 	"github.com/google/tink/go/hybrid"
+	"github.com/google/tink/go/insecurecleartextkeyset"
+	"github.com/google/tink/go/integration/gcpkms"
 	"github.com/google/tink/go/keyset"
 	"github.com/google/tink/go/tink"
 )
@@ -55,6 +58,10 @@ var (
 	}
 	khPub *keyset.Handle
 	enc   tink.HybridEncrypt
+
+	// Change this. AWS KMS, Google Cloud KMS and HashiCorp Vault are supported out of the box.
+	keyURI          = os.Getenv("KEY_URI")
+	credentialsPath = os.Getenv("GCP_CRED_PATH")
 )
 
 // generator config
@@ -189,10 +196,23 @@ func parseFlags() genCfg {
 	return c
 }
 
-func setupKeyset() {
-	var err error
+func loadMasterKeyFromKMS() (tink.AEAD, error) {
+	// Fetch the master key from a KMS.
+	gcpClient, err := gcpkms.NewClientWithCredentials(keyURI, credentialsPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	registry.RegisterKMSClient(gcpClient)
+	masterKey, err := gcpClient.GetAEAD(keyURI)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	f, err := os.Open("./pubkey.json")
+	return masterKey, err
+}
+
+func encryptKeyWithKMSMasterKey(deckeyfile string, enckeyfile string) {
+	f, err := os.Open(deckeyfile)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -200,10 +220,64 @@ func setupKeyset() {
 
 	reader := keyset.NewJSONReader(f)
 
-	khPub, err = keyset.ReadWithNoSecrets(reader)
+	// khPub, err = keyset.ReadWithNoSecrets(reader)
+
+	// private key
+	// "github.com/google/tink/go/insecurecleartextkeyset"
+	khPub, err = insecurecleartextkeyset.Read(reader)
+
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	f2, err := os.OpenFile(enckeyfile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f2.Close()
+
+	writer := keyset.NewBinaryWriter(f2)
+
+	// An io.Reader and io.Writer implementation which simply writes to memory.
+	// memKeyset := &keyset.MemReaderWriter{}
+
+	masterKey, err := loadMasterKeyFromKMS()
+
+	// Write encrypts the keyset handle with the master key and writes to the
+	// io.Writer implementation (memKeyset). We recommend that you encrypt the
+	// keyset handle before persisting it.
+	if err := khPub.Write(writer, masterKey); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func setupKeyset() {
+	var err error
+
+	f, err := os.Open("./pubkey-enc")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+
+	reader := keyset.NewBinaryReader(f)
+
+	masterKey, err := loadMasterKeyFromKMS()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	khPub, err = keyset.Read(reader, masterKey)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Read reads the encrypted keyset handle back from the io.Reader
+	// implementation and decrypts it using the master key.
+	// kh2, err := keyset.Read(memKeyset, masterKey)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	// khPriv2, err := keyset.NewHandle(hybrid.ECIESHKDFAES128GCMKeyTemplate())
 	// if err != nil {
@@ -252,6 +326,8 @@ func encryptData(data string) string {
 }
 
 func main() {
+	// encryptKeyWithKMSMasterKey("./keyset.json", "./keyset-enc")
+
 	cfg := parseFlags()
 
 	f, err := os.OpenFile(cfg.filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
